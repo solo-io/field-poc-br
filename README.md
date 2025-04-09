@@ -485,7 +485,11 @@ spec:
       mode: Passthrough
 EOF
 ```
+Run this please
 
+```bash
+kubectl get cm istio-sidecar-injector -n istio-system -ojson | jq .data.values -r|jq .global.hub -r
+```
 Apply labels to the reviews service for the cluster
 
 ```bash
