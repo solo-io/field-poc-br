@@ -486,6 +486,16 @@ spec:
 EOF
 ```
 
+Apply labels to the reviews service for the cluster
+
+```bash
+for context in $CLUSTER1 $CLUSTER2; do
+  kubectl set env -n service-mesh --context $context deployments/reviews-v1 CLUSTER_NAME=$context
+  kubectl set env -n service-mesh --context $context deployments/reviews-v2 CLUSTER_NAME=$context
+  kubectl set env -n service-mesh --context $context deployments/reviews-v3 CLUSTER_NAME=$context
+done
+```
+
 ### Enable Istio Ambient for service-mesh Namespace
 
 ```bash
