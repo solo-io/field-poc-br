@@ -135,6 +135,7 @@ env:
   PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES: "false"
   # Required when meshConfig.trustDomain is set
   PILOT_SKIP_VALIDATE_TRUST_DOMAIN: "true"
+  PEERING_DISCOVERY_NAMESPACE: cnp-istio
 global:
   hub: ${REPO}
   multiCluster:
@@ -184,6 +185,7 @@ env:
   PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES: "false"
   # Required when meshConfig.trustDomain is set
   PILOT_SKIP_VALIDATE_TRUST_DOMAIN: "true"
+  PEERING_DISCOVERY_NAMESPACE: cnp-istio
 global:
   hub: ${REPO}
   multiCluster:
