@@ -421,8 +421,8 @@ istioctl multicluster link --contexts=$CLUSTER1,$CLUSTER2 -n cnp-istio
 Alternatively create the remote peering gateways:
 
 ```bash
-export CLUSTER1_EW_ADDRESS=$(kubectl get svc -n istio-gateways istio-eastwest --context $CLUSTER1 -o jsonpath="{.status.loadBalancer.ingress[0]['hostname','ip']}")
-export CLUSTER2_EW_ADDRESS=$(kubectl get svc -n istio-gateways istio-eastwest --context $CLUSTER2 -o jsonpath="{.status.loadBalancer.ingress[0]['hostname','ip']}")
+export CLUSTER1_EW_ADDRESS=$(kubectl get svc -n cnp-istio istio-eastwest --context $CLUSTER1 -o jsonpath="{.status.loadBalancer.ingress[0]['hostname','ip']}")
+export CLUSTER2_EW_ADDRESS=$(kubectl get svc -n cnp-istio istio-eastwest --context $CLUSTER2 -o jsonpath="{.status.loadBalancer.ingress[0]['hostname','ip']}")
 
 echo "Cluster 1 east-west gateway: $CLUSTER1_EW_ADDRESS"
 echo "Cluster 2 east-west gateway: $CLUSTER2_EW_ADDRESS"
