@@ -362,6 +362,58 @@ Expose using an east-west gateway:
 istioctl --context=${CLUSTER1} multicluster expose --wait -n cnp-istio
 istioctl --context=${CLUSTER2} multicluster expose --wait -n cnp-istio
 ```
+
+Alternatively, create the east/west gateways manually:
+```bash
+kubectl apply --context $CLUSTER1 -f- <<EOF
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  labels:
+    istio.io/expose-istiod: "15012"
+    topology.istio.io/network: cluster1
+  name: istio-eastwest
+  namespace: cnp-istio
+spec:
+  gatewayClassName: istio-eastwest
+  listeners:
+  - name: cross-network
+    port: 15008
+    protocol: HBONE
+    tls:
+      mode: Passthrough
+  - name: xds-tls
+    port: 15012
+    protocol: TLS
+    tls:
+      mode: Passthrough
+EOF
+
+kubectl apply --context $CLUSTER2 -f- <<EOF
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  labels:
+    istio.io/expose-istiod: "15012"
+    topology.istio.io/network: cluster2
+  name: istio-eastwest
+  namespace: cnp-istio
+spec:
+  gatewayClassName: istio-eastwest
+  listeners:
+  - name: cross-network
+    port: 15008
+    protocol: HBONE
+    tls:
+      mode: Passthrough
+  - name: xds-tls
+    port: 15012
+    protocol: TLS
+    tls:
+      mode: Passthrough
+EOF
+```
+
 Link clusters together:
 ```bash
 istioctl multicluster link --contexts=$CLUSTER1,$CLUSTER2 -n cnp-istio
