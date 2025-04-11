@@ -674,7 +674,9 @@ meshctl dashboard
 ## Troubleshooting
 
 ### Compare certificates on both clusters
+```
 diff \
    <(kubectl --context="$CLUSTER1" -n cnp-istio get secret cacerts -ojsonpath='{.data.root-cert\.pem}') \
    <(kubectl --context="$CLUSTER2" -n cnp-istio get secret cacerts -ojsonpath='{.data.root-cert\.pem}')
+```
 
