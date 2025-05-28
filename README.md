@@ -61,6 +61,11 @@ done
 ### Configure Trust - Issue Intermediate Certs
 
 ```bash
+kubectl get secret cacerts -n istio-system --context $CLUSTER1 -o jsonpath='{.data.root-cert\.pem}' | base64 --decode
+kubectl get secret cacerts -n istio-system --context $CLUSTER2 -o jsonpath='{.data.root-cert\.pem}' | base64 --decode
+```
+
+```bash
 curl -L https://istio.io/downloadIstio | sh -
 cd istio-1.25.1
 mkdir -p certs
