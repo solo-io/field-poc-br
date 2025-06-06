@@ -4,30 +4,117 @@ glooAgent:
   enabled: true
   runAsSidecar: true
   relay:
-    serverAddress: gloo-mesh-mgmt-server.cnp-nginx:9900
+    serverAddress: gloo-mesh-mgmt-server.service-mesh:9900
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
 glooAnalyzer:
   enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
 glooMgmtServer:
   enabled: true
   registerCluster: true
   policyApis:
     enabled: true
+  image:
+    registry: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 512Mi
 glooInsightsEngine:
   enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
 glooUi:
   enabled: true
+  image:
+    registry: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh
+  sidecars:
+    console:
+      image:
+        registry: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh
+    envoy:
+      image:
+        registry: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh
   # serviceType: LoadBalancer
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
 prometheus:
   enabled: true
+  server:
+    image:
+      repository: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh/prometheus
+  configmapReload:
+    prometheus:
+      image:
+        repository: harbor-preprod.blackrock.com/library/external/quay.io/prometheus-operator/prometheus-config-reloader
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
 redis:
   deployment:
     enabled: true
+    image:
+      registry: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
 # jaeger:
 #   enabled: true
 telemetryCollector:
   enabled: true
+  image:
+    repository: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh/otel-collector
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
 telemetryGateway:
   enabled: true
+  image:
+    repository: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh/otel-collector
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
 telemetryGatewayCustomization:
   pipelines:
     traces/jaeger:
@@ -39,3 +126,4 @@ telemetryCollectorCustomization:
 installEnterpriseCrds: false
 featureGates:
   ConfigDistribution: false
+
