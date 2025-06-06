@@ -1,0 +1,52 @@
+licensing:
+  glooTrialLicenseKey: ${GLOO_MESH_LICENSE_KEY}
+common:
+  cluster: mgmt
+glooInsightsEngine:
+  enabled: false
+glooMgmtServer:
+  enabled: true
+  ports:
+    healthcheck: 8091
+  image:
+    registry: ${registry}/gloo-mesh
+redis:
+  deployment:
+    enabled: true
+    image:
+      registry: ${registry}/gloo-mesh
+telemetryGateway:
+  enabled: true
+  image:
+    repository: ${registry}/${otel_collector_image}
+  service:
+    type: LoadBalancer
+prometheus:
+  enabled: true
+  server:
+    image:
+      repository: ${registry}/gloo-mesh/prometheus
+  configmapReload:
+    prometheus:
+      image:
+        repository: ${registry}/prometheus-operator/prometheus-config-reloader
+glooUi:
+  enabled: true
+  serviceType: LoadBalancer
+  image:
+    registry: ${registry}/gloo-mesh
+  sidecars:
+    console:
+      image:
+        registry: ${registry}/gloo-mesh
+    envoy:
+      image:
+        registry: ${registry}/gloo-mesh
+telemetryCollector:
+  image:
+    repository: ${registry}/${otel_collector_image}
+  enabled: true
+  config:
+    exporters:
+      otlp:
+        endpoint: gloo-telemetry-gateway:4317
