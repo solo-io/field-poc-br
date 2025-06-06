@@ -1,0 +1,41 @@
+common:
+  cluster: cluster1
+glooAgent:
+  enabled: true
+  runAsSidecar: true
+  relay:
+    serverAddress: gloo-mesh-mgmt-server.gloo-mesh:9900
+glooAnalyzer:
+  enabled: true
+glooMgmtServer:
+  enabled: true
+  registerCluster: true
+  policyApis:
+    enabled: true
+glooInsightsEngine:
+  enabled: true
+glooUi:
+  enabled: true
+  # serviceType: LoadBalancer
+prometheus:
+  enabled: true
+redis:
+  deployment:
+    enabled: true
+# jaeger:
+#   enabled: true
+telemetryCollector:
+  enabled: true
+telemetryGateway:
+  enabled: true
+telemetryGatewayCustomization:
+  pipelines:
+    traces/jaeger:
+      enabled: true
+telemetryCollectorCustomization:
+  pipelines:
+    traces/istio:
+      enabled: true
+installEnterpriseCrds: false
+featureGates:
+  ConfigDistribution: false
