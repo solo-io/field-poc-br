@@ -642,6 +642,37 @@ Finally, call global httppbin from ratings ambient pod:
 kubectl exec -n cnp-nginx deploy/curl -- curl -s httpbin.cnp-nginx.mesh.internal:8000
 ```
 
+### Add headers to the request
+
+You can add arbitrary headers to inbound requests using a VirtualService:
+
+```bash
+kubectl apply -f- <<
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: httpbin-route
+  namespace: cnp-nginx
+spec:
+  hosts:
+  - httpbin
+  http:
+  - headers:
+      request:
+        add:
+          blackrock: "rules"
+    route:
+    - destination:
+        host: httpbin
+EOF
+```
+
+Test by curling the endpoint from busybox:
+
+```bash
+curl -ivk http://httbin.cnp-nginx:8000/headers
+```
+
 ## Gloo Management Plane
 
 Optionally, you can deploy the Gloo Management Plane that provides many benefits and features. For this lab, we'll just focus on the UI and the service graph. 
