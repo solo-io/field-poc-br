@@ -644,7 +644,7 @@ kubectl exec -n cnp-nginx deploy/curl -- curl -s httpbin.cnp-nginx.mesh.internal
 
 ### Add headers to the request
 
-You can add arbitrary headers to inbound requests using a VirtualService.
+You can add arbitrary headers to inbound requests using an HTTPRoute.
 
 First, create a waypoint for httpbin
 ```bash
@@ -665,26 +665,34 @@ EOF
 kubectl label svc httpbin -n cnp-nginx --context $CLUSTER1 istio.io/use-waypoint=waypoint
 ```
 
-Then create virtual service:
+Then create an HTTP route:
 
 ```bash
 kubectl apply -f- <<EOF
-apiVersion: networking.istio.io/v1
-kind: VirtualService
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
 metadata:
-  name: httpbin-route
+  name: httpbin
   namespace: cnp-nginx
 spec:
-  hosts:
-  - httpbin
-  http:
-  - headers:
-      request:
-        add:
-          blackrock: "rules"
-    route:
-    - destination:
-        host: httpbin
+  parentRefs:
+  - name: httpbin
+    kind: Service
+    group: ""
+  rules:
+    - matches:
+      - path:
+          type: PathPrefix
+          value: /
+      backendRefs:
+       - name: httpbin
+         port: 8000
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            add:
+              - name: blackrock
+                value: rules
 EOF
 ```
 
