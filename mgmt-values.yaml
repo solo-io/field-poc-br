@@ -4,7 +4,7 @@ glooAgent:
   enabled: true
   runAsSidecar: true
   relay:
-    serverAddress: gloo-mesh-mgmt-server.service-mesh:9900
+    serverAddress: gloo-mesh-mgmt-server.cnp-nginx:9900
 glooAnalyzer:
   enabled: true
 glooMgmtServer:
