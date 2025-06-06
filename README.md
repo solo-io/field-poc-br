@@ -653,7 +653,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: waypoint
-  namespace: cnp-nginx
+  namespace: service-mesh
 spec:
   gatewayClassName: istio-waypoint
   listeners:
@@ -673,7 +673,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: httpbin
-  namespace: cnp-nginx
+  namespace: service-mesh
 spec:
   parentRefs:
   - name: httpbin
@@ -699,7 +699,7 @@ EOF
 Test by curling the endpoint from busybox:
 
 ```bash
-curl -ivk http://httbin.cnp-nginx:8000/headers
+curl -ivk http://httpbin.service-mesh:8000/headers
 ```
 
 ## Gloo Management Plane
