@@ -647,7 +647,7 @@ kubectl exec -n cnp-nginx deploy/curl -- curl -s httpbin.cnp-nginx.mesh.internal
 You can add arbitrary headers to inbound requests using a VirtualService:
 
 ```bash
-kubectl apply -f- <<
+kubectl apply -f- <<EOF
 apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
