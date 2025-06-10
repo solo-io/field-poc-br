@@ -1,0 +1,2252 @@
+---
+# Source: gloo-platform/charts/telemetryCollector/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gloo-telemetry-collector
+  namespace: cnp-nginx
+  labels:
+    helm.sh/chart: telemetryCollector-0.93.3
+    app.kubernetes.io/name: telemetryCollector
+    app.kubernetes.io/instance: gloo-platform
+    app.kubernetes.io/version: "0.102.1"
+    app.kubernetes.io/managed-by: Helm
+    app: gloo-telemetry-collector-agent
+---
+# Source: gloo-platform/templates/deployment.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: gloo-mesh-agent
+  name: gloo-mesh-agent
+  namespace: cnp-nginx
+---
+# Source: gloo-platform/templates/telemetry-collector-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gloo-telemetry-collector-config
+  namespace: cnp-nginx
+data:
+  relay: |
+    receivers:
+      jaeger:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:14250
+          thrift_binary:
+            endpoint: 0.0.0.0:6832
+          thrift_compact:
+            endpoint: 0.0.0.0:6831
+          thrift_http:
+            endpoint: 0.0.0.0:14268
+
+      opencensus:
+        endpoint: 0.0.0.0:55679
+
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+            max_recv_msg_size_mib: 12
+          http:
+            endpoint: 0.0.0.0:4318
+
+      zipkin:
+        endpoint: 0.0.0.0:9411
+
+      prometheus:
+        config:
+          global:
+            evaluation_interval: 1m
+            scrape_interval: 15s
+            scrape_timeout: 15s
+          scrape_configs:
+          # Scrape the collector itself
+          - job_name: otel-collector
+            scrape_interval: 15s
+            static_configs:
+            - labels:
+                collector_name: ${env:KUBE_POD_NAME}
+                cluster: cluster2
+              targets:
+                - 0.0.0.0:8888
+
+          # Scrape workload metrics
+          - job_name: mesh-workloads
+            honor_labels: true
+            kubernetes_sd_configs:
+            - role: pod
+              selectors:
+              - role: pod
+                field: "spec.nodeName=${env:KUBE_NODE_NAME}"
+            relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_container_port_name]
+              action: keep
+              regex: '.*-envoy-prom'
+            - action: keep
+              regex: true
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_scrape
+            - action: replace
+              regex: (https?)
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_scheme
+              target_label: __scheme__
+            - action: replace
+              regex: (.+)
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_path
+              target_label: __metrics_path__
+            - action: replace
+              regex: (\d+);(([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4})
+              replacement: '[$$2]:$$1'
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_port
+              - __meta_kubernetes_pod_ip
+              target_label: __address__
+            - action: replace
+              regex: (\d+);((([0-9]+?)(\.|$)){4})
+              replacement: $$2:$$1
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_port
+              - __meta_kubernetes_pod_ip
+              target_label: __address__
+            - action: labelmap
+              regex: __meta_kubernetes_pod_annotation_prometheus_io_param_(.+)
+              replacement: __param_$$1
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - action: replace
+              source_labels:
+              - __meta_kubernetes_namespace
+              target_label: namespace
+            - action: replace
+              source_labels:
+              - __meta_kubernetes_pod_name
+              target_label: pod_name
+            - action: replace
+              replacement: cluster2
+              target_label: cluster
+            - action: drop
+              regex: Pending|Succeeded|Failed|Completed
+              source_labels:
+              - __meta_kubernetes_pod_phase
+            metric_relabel_configs:
+            - action: labelmap
+              regex: __meta_kubernetes_service_label_(.+)
+            - action: replace
+              source_labels:
+              - __meta_kubernetes_service_name
+              target_label: service
+            - action: replace
+              regex: Kubernetes
+              replacement: cluster2
+              source_labels:
+              - source_cluster
+              target_label: source_cluster
+            - action: replace
+              regex: Kubernetes
+              replacement: cluster2
+              source_labels:
+              - destination_cluster
+              target_label: destination_cluster
+            - source_labels:
+              - source_workload
+              - source_workload_namespace
+              - source_cluster
+              target_label: workload_id
+              separator: '.'
+            - source_labels:
+              - destination_workload
+              - destination_workload_namespace
+              - destination_cluster
+              target_label: destination_workload_id
+              separator: '.'
+            # if both workload id and destination service are unknown
+            # set the label to ".." which will be handled by a later rule
+            - source_labels:
+              - destination_workload_id
+              - destination_service
+              separator: ";"
+              target_label: destination_workload_id
+              replacement: ".."
+              regex: "unknown.unknown.unknown;unknown"
+            # if workload id is unknown but we have a destination
+            # service, use it
+            - source_labels:
+              - destination_workload_id
+              - destination_service
+              separator: ";"
+              target_label: destination_workload_id
+              replacement: $$2.<unknown>.<unknown>
+              regex: "(unknown.unknown.unknown);(.*)"
+            # replace with unknown if missing
+            - source_labels:
+              - destination_workload_id
+              target_label: destination_workload_id
+              replacement: "unknown.unknown.unknown"
+              regex: ".."
+            - source_labels:
+              - workload_id
+              target_label: workload_id
+              replacement: "unknown.unknown.unknown"
+              regex: ".."
+
+          # Scrape istiod metrics
+          - job_name: istiod-metrics
+            honor_labels: true
+            kubernetes_sd_configs:
+            - role: pod
+              selectors:
+              - role: pod
+                field: "spec.nodeName=${env:KUBE_NODE_NAME}"
+                label: "istio"
+            relabel_configs:
+            - action: keep
+              regex: pilot|istiod
+              source_labels:
+                - __meta_kubernetes_pod_label_istio
+            - action: keep
+              regex: true
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_scrape
+            - action: replace
+              regex: (https?)
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_scheme
+              target_label: __scheme__
+            - action: replace
+              regex: (.+)
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_path
+              target_label: __metrics_path__
+            - action: replace
+              regex: (\d+);(([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4})
+              replacement: '[$$2]:$$1'
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_port
+              - __meta_kubernetes_pod_ip
+              target_label: __address__
+            - action: replace
+              regex: (\d+);((([0-9]+?)(\.|$)){4})
+              replacement: $$2:$$1
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_port
+              - __meta_kubernetes_pod_ip
+              target_label: __address__
+            - action: labelmap
+              regex: __meta_kubernetes_pod_annotation_prometheus_io_param_(.+)
+              replacement: __param_$$1
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - action: replace
+              source_labels:
+              - __meta_kubernetes_namespace
+              target_label: namespace
+            - action: replace
+              source_labels:
+              - __meta_kubernetes_pod_name
+              target_label: pod_name
+            - action: replace
+              replacement: cluster2
+              target_label: cluster
+            - action: drop
+              regex: Pending|Succeeded|Failed|Completed
+              source_labels:
+              - __meta_kubernetes_pod_phase
+
+          # Scrape the gloo platform pods
+          - job_name: gloo-platform-pods
+            honor_labels: true
+            kubernetes_sd_configs:
+            - role: pod
+              namespaces:
+                names:
+                - cnp-nginx
+              selectors:
+              - role: pod
+                field: "spec.nodeName=${env:KUBE_NODE_NAME}"
+            relabel_configs:
+            - action: keep
+              regex: gloo-mesh-mgmt-server|gloo-mesh-agent|gloo-mesh-analyzer|gloo-mesh-ui
+              source_labels:
+              - __meta_kubernetes_pod_label_app
+            - action: keep
+              regex: true
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_scrape
+            - action: replace
+              regex: (https?)
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_scheme
+              target_label: __scheme__
+            - action: replace
+              regex: (.+)
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_path
+              target_label: __metrics_path__
+            - source_labels: [__meta_kubernetes_pod_container_port_name]
+              action: keep
+              regex: stats
+            - action: replace
+              regex: (\d+);(([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4})
+              replacement: '[$$2]:$$1'
+              source_labels:
+              - __meta_kubernetes_pod_container_port_number
+              - __meta_kubernetes_pod_ip
+              target_label: __address__
+            - action: replace
+              regex: (\d+);((([0-9]+?)(\.|$)){4})
+              replacement: $$2:$$1
+              source_labels:
+              - __meta_kubernetes_pod_container_port_number
+              - __meta_kubernetes_pod_ip
+              target_label: __address__
+            - action: labelmap
+              regex: __meta_kubernetes_pod_annotation_prometheus_io_param_(.+)
+              replacement: __param_$$1
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - action: replace
+              source_labels:
+              - __meta_kubernetes_namespace
+              target_label: namespace
+            - action: drop
+              regex: Pending|Succeeded|Failed|Completed
+              source_labels:
+              - __meta_kubernetes_pod_phase
+            - action: replace
+              replacement: cluster2
+              target_label: cluster
+            - action: replace
+              target_label: pod
+              source_labels: [__meta_kubernetes_pod_name]
+
+          # Scrape the ambient ztunnels
+          - job_name: ambient-ztunnels
+            honor_labels: true
+            kubernetes_sd_configs:
+            - role: pod
+              selectors:
+              - role: pod
+                field: "spec.nodeName=${env:KUBE_NODE_NAME}"
+            relabel_configs:
+            - action: keep
+              regex: ztunnel
+              source_labels:
+              - __meta_kubernetes_pod_label_app
+            - action: replace
+              regex: (\d+);(([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4})
+              replacement: '[$$2]:$$1'
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_port
+              - __meta_kubernetes_pod_ip
+              target_label: __address__
+            - action: replace
+              regex: (\d+);((([0-9]+?)(\.|$)){4})
+              replacement: $$2:$$1
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_port
+              - __meta_kubernetes_pod_ip
+              target_label: __address__
+            - action: replace
+              replacement: "http"
+              target_label: __schema__
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - action: replace
+              source_labels:
+              - __meta_kubernetes_namespace
+              target_label: namespace
+            - action: replace
+              replacement: cluster2
+              target_label: cluster
+            - action: drop
+              regex: Pending|Succeeded|Failed|Completed
+              source_labels:
+              - __meta_kubernetes_pod_phase
+            metric_relabel_configs:
+            - target_label: ambient
+              replacement: "ztunnel"
+            - action: labelmap
+              regex: __meta_kubernetes_service_label_(.+)
+            - action: replace
+              source_labels:
+              - __meta_kubernetes_service_name
+              target_label: service
+            - action: replace
+              regex: Kubernetes
+              replacement: cluster2
+              source_labels:
+              - source_cluster
+              target_label: source_cluster
+            - action: replace
+              regex: Kubernetes
+              replacement: cluster2
+              source_labels:
+              - destination_cluster
+              target_label: destination_cluster
+            - source_labels:
+              - source_workload
+              - source_workload_namespace
+              - source_cluster
+              target_label: workload_id
+              separator: '.'
+            - source_labels:
+              - destination_workload
+              - destination_workload_namespace
+              - destination_cluster
+              target_label: destination_workload_id
+              separator: '.'
+            # replace with unknown if missing
+            - source_labels:
+              - destination_workload_id
+              target_label: destination_workload_id
+              replacement: "unknown.unknown.unknown"
+              regex: ".."
+            - source_labels:
+              - workload_id
+              target_label: workload_id
+              replacement: "unknown.unknown.unknown"
+              regex: ".."
+
+          # Scrape the ambient waypoints
+          - job_name: ambient-waypoints
+            honor_labels: true
+            kubernetes_sd_configs:
+            - role: pod
+              selectors:
+              - role: pod
+                field: "spec.nodeName=${env:KUBE_NODE_NAME}"
+            relabel_configs:
+            - action: keep
+              regex: ".+"
+              source_labels:
+              - __meta_kubernetes_pod_annotation_istio_io_for_service_account
+            - action: replace
+              regex: (\d+);(([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4})
+              replacement: '[$$2]:$$1'
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_port
+              - __meta_kubernetes_pod_ip
+              target_label: __address__
+            - action: replace
+              regex: (\d+);((([0-9]+?)(\.|$)){4})
+              replacement: $$2:$$1
+              source_labels:
+              - __meta_kubernetes_pod_annotation_prometheus_io_port
+              - __meta_kubernetes_pod_ip
+              target_label: __address__
+            - action: replace
+              replacement: "http"
+              target_label: __schema__
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - action: replace
+              source_labels:
+              - __meta_kubernetes_namespace
+              target_label: namespace
+            - action: drop
+              regex: Pending|Succeeded|Failed|Completed
+              source_labels:
+              - __meta_kubernetes_pod_phase
+            - action: replace
+              replacement: cluster2
+              target_label: cluster
+            metric_relabel_configs:
+            - target_label: ambient
+              replacement: "waypoint"
+            - action: labelmap
+              regex: __meta_kubernetes_service_label_(.+)
+            - action: replace
+              source_labels:
+              - __meta_kubernetes_service_name
+              target_label: service
+            - action: replace
+              regex: Kubernetes
+              replacement: cluster2
+              source_labels:
+              - source_cluster
+              target_label: source_cluster
+            - action: replace
+              regex: Kubernetes
+              replacement: cluster2
+              source_labels:
+              - destination_cluster
+              target_label: destination_cluster
+            - source_labels:
+              - source_workload
+              - source_workload_namespace
+              - source_cluster
+              target_label: workload_id
+              separator: '.'
+            - source_labels:
+              - destination_workload
+              - destination_workload_namespace
+              - destination_cluster
+              target_label: destination_workload_id
+              separator: '.'
+            # replace with unknown if missing
+            - source_labels:
+              - destination_workload_id
+              target_label: destination_workload_id
+              replacement: "unknown.unknown.unknown"
+              regex: ".."
+            - source_labels:
+              - workload_id
+              target_label: workload_id
+              replacement: "unknown.unknown.unknown"
+              regex: ".."
+      # Custom receivers
+      filelog/access_logs:
+        include:
+        - /var/log/pods/*/istio-proxy/*.log
+        include_file_name: false
+        include_file_path: true
+        operators:
+        - expr: body matches "^[^{}]*$"
+          type: filter
+        - id: get-format
+          routes:
+          - expr: body matches "^\\{"
+            output: parser-docker
+          - expr: body matches "^[^ Z]+ "
+            output: parser-crio
+          - expr: body matches "^[^ Z]+Z"
+            output: parser-containerd
+          type: router
+        - id: parser-crio
+          output: extract_metadata_from_filepath
+          regex: ^(?P<time>[^ Z]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$
+          type: regex_parser
+        - id: parser-containerd
+          output: extract_metadata_from_filepath
+          regex: ^(?P<time>[^ ^Z]+Z) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$
+          type: regex_parser
+        - id: parser-docker
+          output: extract_metadata_from_filepath
+          type: json_parser
+        - cache:
+            size: 128
+          id: extract_metadata_from_filepath
+          output: log_parser
+          parse_from: attributes["log.file.path"]
+          regex: ^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]{36})\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log$
+          type: regex_parser
+        - id: log_parser
+          parse_from: attributes.log
+          timestamp:
+            layout: '%Y-%m-%dT%H:%M:%S.%LZ'
+            parse_from: attributes.timestamp
+          type: json_parser
+        - expr: (attributes?.api_id ?? "") == ""
+          type: filter
+        - from: attributes.stream
+          to: attributes["log.iostream"]
+          type: move
+        - from: attributes.container_name
+          to: resource["k8s.container.name"]
+          type: move
+        - from: attributes.namespace
+          to: resource["k8s.namespace.name"]
+          type: move
+        - from: attributes.pod_name
+          to: resource["k8s.pod.name"]
+          type: move
+        - from: attributes.restart_count
+          to: resource["k8s.container.restart_count"]
+          type: move
+        - from: attributes.uid
+          to: resource["k8s.pod.uid"]
+          type: move
+        - field: body
+          type: remove
+        - field: attributes.log
+          type: remove
+      filelog/gloo_components:
+        include:
+        - /var/log/pods/*_gloo-*/*/*.log
+        include_file_name: false
+        include_file_path: true
+        operators:
+        - cache:
+            size: 128
+          id: extract_metadata_from_filepath
+          parse_from: attributes["log.file.path"]
+          regex: ^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]{36})\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log$
+          type: regex_parser
+        - from: attributes.namespace
+          to: resource["k8s.namespace.name"]
+          type: move
+        - from: attributes.pod_name
+          to: resource["k8s.pod.name"]
+          type: move
+        - from: attributes.container_name
+          to: resource["k8s.container.name"]
+          type: move
+        - field: resource["component"]
+          if: resource["k8s.pod.name"] contains "gloo-mesh-agent"
+          type: add
+          value: gloo-mesh-agent
+        - field: resource["component"]
+          if: resource["k8s.pod.name"] contains "gloo-mesh-mgmt-server"
+          type: add
+          value: gloo-mesh-mgmt-server
+        - field: resource["component"]
+          if: resource["k8s.pod.name"] contains "gloo-mesh-ui"
+          type: add
+          value: gloo-mesh-ui
+        - field: resource["component"]
+          if: resource["k8s.pod.name"] contains "gloo-mesh-redis"
+          type: add
+          value: gloo-mesh-redis
+        - field: resource["component"]
+          if: resource["k8s.pod.name"] contains "gloo-redis-snapshot"
+          type: add
+          value: gloo-redis-snapshot
+        - field: resource["component"]
+          if: resource["k8s.pod.name"] contains "gloo-redis-insights"
+          type: add
+          value: gloo-redis-insights
+        - field: resource["component"]
+          if: resource["k8s.pod.name"] contains "gloo-telemetry-collector-agent"
+          type: add
+          value: gloo-telemetry-collector-agent
+        - field: resource["component"]
+          if: resource["k8s.pod.name"] contains "gloo-telemetry-gateway"
+          type: add
+          value: gloo-telemetry-gateway
+        - field: resource["component"]
+          if: resource["k8s.pod.name"] contains "gloo-mesh-analyzer"
+          type: add
+          value: gloo-mesh-analyzer
+      filelog/istiod:
+        include:
+        - /var/log/pods/*_istiod-*/*/*.log
+        include_file_name: false
+        include_file_path: true
+        operators:
+        - cache:
+            size: 128
+          id: extract_metadata_from_filepath
+          parse_from: attributes["log.file.path"]
+          regex: ^.*\/(?P<namespace>[^_]+)_(?P<pod_name>[^_]+)_(?P<uid>[a-f0-9\-]{36})\/(?P<container_name>[^\._]+)\/(?P<restart_count>\d+)\.log$
+          type: regex_parser
+        - from: attributes.namespace
+          to: resource["k8s.namespace.name"]
+          type: move
+        - from: attributes.pod_name
+          to: resource["k8s.pod.name"]
+          type: move
+        - from: attributes.container_name
+          to: resource["k8s.container.name"]
+          type: move
+        - cache:
+            size: 128
+          id: extract_component_from_pod_name
+          parse_from: resource["k8s.pod.name"]
+          regex: ^(?P<component_name>.*)-[0-9a-zA-Z]{1,10}-[0-9a-zA-Z]*$
+          type: regex_parser
+        - from: attributes.component_name
+          to: resource["component"]
+          type: move
+
+    processors:
+      resource/cluster_context:
+        attributes:
+          - key: "cluster_name"
+            action: insert
+            value: cluster2
+
+      resource/ui_source_context:
+        attributes:
+          - key: "source"
+            action: insert
+            value: "ui-log-stream"
+
+      resource/portal_source_context:
+        attributes:
+          - key: "source"
+            action: insert
+            value: "portal"
+
+      gloo_metrics_processor:
+        clusterName: cluster2
+        enableClusterNodeProcessor: false
+
+      filter/min:
+        metrics:
+          include:
+            match_type: strict
+            metric_names:
+              # istio gateway, sidecar, ztunnel, waypoint, and gloo gateway metrics
+              - istio_requests_total
+              - istio_request_duration_milliseconds
+              - istio_tcp_sent_bytes_total
+              - istio_tcp_received_bytes_total
+              - istio_tcp_connections_opened_total
+              - gloo_gateway_upstream_rq
+              - gloo_gateway_upstream_rq_time
+              - gloo_gateway_upstream_cx_rx_bytes_total
+              - gloo_gateway_upstream_cx_tx_bytes_total
+              # istiod metrics
+              - pilot_proxy_convergence_time
+              # required for meshctl
+              - relay_pull_clients_connected
+              - relay_push_clients_connected
+              - relay_push_clients_warmed
+              # Keep otel-collector metrics that show how it's working
+              - otelcol_processor_refused_metric_points
+              - otelcol_receiver_refused_metric_points
+              - otelcol_processor_refused_spans
+              - otelcol_exporter_queue_capacity
+              - otelcol_exporter_queue_size
+              - otelcol_loadbalancer_backend_latency
+              - otelcol_exporter_send_failed_spans
+              # OTel in version 0.87.0+ has a bug where it will drop metrics if the suffix is added, in this case `_total`
+              # the alternative with the suffix are kept in place if this breaking change/bug is fixed in the future
+              - istio_requests
+              - istio_tcp_sent_bytes
+              - istio_tcp_received_bytes
+              - istio_tcp_connections_opened
+              - gloo_mesh_agent_warmed_up
+              - gloo_mesh_reconciler_time_sec
+              - gloo_mesh_garbage_collection_time_sec
+              - gloo_mesh_redis_relation_err
+              - gloo_mesh_redis_sync_err
+              - gloo_mesh_redis_write_time_sec
+              - gloo_mesh_snapshot_upserter_op_time_sec
+              - gloo_mesh_translation_time_sec
+              - gloo_mesh_translator_concurrency
+              - translation_error
+              - translation_warning
+              - gloo_mesh_relay_client_delta_pull_time_sec
+              - gloo_mesh_relay_client_delta_pull_err
+              - gloo_mesh_relay_client_delta_push_time_sec
+              - gloo_mesh_relay_client_delta_push_err
+              - gloo_mesh_build_snapshot_metric_time_sec
+              - gloo_mesh_redis_write_time_sec
+              - gloo_mesh_redis_sync_err
+              - gloo_mesh_safe_mode_active
+              - gloo_mesh_insights_store_upsert_time_sec
+              - gloo_mesh_insights_store_list_time_sec
+              - gloo_mesh_insights_store_delete_time_sec
+              - solo_io_gloo_mesh_gateway_license
+              - gloo_mesh_insights
+              - gloo_mesh_insights_resources_scanned
+              - gloo_mesh_insight_engine_errors_total
+              - gloo_mesh_insights_total_execution_time
+              - gloo_mesh_insights_execution_time
+              - gloo_mesh_analyzer_total_execution_time
+              - gloo_mesh_analyzer_execution_time
+              - gloo_mesh_analyzer_logs_total
+              - object_write_fails_total
+              - gloo_mesh_relay_client_last_delta_pull_received_timestamp_seconds
+              - gloo_mesh_relay_client_last_server_communication_pull_stream_timestamp_seconds
+              - gloo_mesh_relay_client_last_delta_push_timestamp_seconds
+              - gloo_mesh_relay_client_delta_push_last_loop_timestamp_seconds
+
+      # Metric label allow lists to reduce cardinality in our internal metric pipelines
+      transform/keep_istio_labels:
+        metric_statements:
+          - context: datapoint
+            statements:
+              - keep_keys(attributes, ["cluster","collector_pod","connection_security_policy","destination_cluster","destination_principal","destination_service","destination_workload","destination_workload_id","destination_workload_namespace","gloo_mesh","namespace","pod_name","reporter","response_code","response_flags","source_cluster","source_principal","source_workload","source_workload_namespace","version","workload_id"]) where IsMatch(metric.name, "^istio.*")
+      transform/keep_otelcol_labels:
+        metric_statements:
+          - context: datapoint
+            statements:
+              - keep_keys(attributes, ["app","cluster","collector_name","collector_pod","component","exporter","namespace","pod_template_generation","processor","service_version"]) where IsMatch(metric.name, "^otelcol.*")
+      transform/keep_ebpf_solo_io_labels:
+        metric_statements:
+          - context: datapoint
+            statements:
+              - keep_keys(attributes, ["app","client_addr","cluster","code","collector_pod","component","destination","local_addr","namespace","pod","pod_template_generation","remote_identity","server_identity","source"]) where IsMatch(metric.name, "^ebpf_solo_io.*")
+      # Custom processors
+      batch:
+        send_batch_max_size: 3000
+        send_batch_size: 2000
+        timeout: 600ms
+      batch/logs:
+        send_batch_size: 100
+        timeout: 5s
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 85
+        spike_limit_percentage: 10
+
+      # Create gloo_gateway_ metrics out of envoy_cluster_ metrics when envoy_cluster_name is meaningful for our Graph
+      # Update experimental_match_labels to match all desired kind once they are supported by Gloo Gateway
+      metricstransform/gg_gloo_gateway_metrics:
+        transforms:
+          - include: "(envoy_cluster_upstream_rq$)"
+            action: insert
+            new_name: gloo_gateway_upstream_rq
+            match_type: regexp
+            experimental_match_labels: {"envoy_cluster_name": "^kube-svc.*"}
+          - include: "(envoy_cluster_upstream_rq_time$)"
+            action: insert
+            new_name: gloo_gateway_upstream_rq_time
+            match_type: regexp
+            experimental_match_labels: {"envoy_cluster_name": "^kube-svc.*"}
+          - include: envoy_cluster_upstream_cx_rx_bytes_total
+            action: insert
+            new_name: gloo_gateway_upstream_cx_rx_bytes_total
+            match_type: regexp
+            experimental_match_labels: {"envoy_cluster_name": "^kube-svc.*"}
+          - include: envoy_cluster_upstream_cx_tx_bytes_total
+            action: insert
+            new_name: gloo_gateway_upstream_cx_tx_bytes_total
+            match_type: regexp
+            experimental_match_labels: {"envoy_cluster_name": "^kube-svc.*"}
+      transform/gg_envoy_cluster_names_to_workload_names:
+        error_mode: ignore
+        metric_statements:
+        - context: datapoint
+          statements:
+          - set(cache["temp"], Split(attributes["envoy_cluster_name"], "_")) where attributes["envoy_cluster_name"] != nil and IsMatch(metric.name, "^gloo_gateway_.*")
+          # We are splitting the value of the original envoy_cluster_name into slices delimited by underscores.
+          # Format: kind_upstreamName_upstreamNs_svcNs_svcName_svcPort
+          - set(attributes["destination_workload_namespace"], cache["temp"][3]) where IsMatch(metric.name, "^gloo_gateway_.*")
+          - set(attributes["destination_workload"], cache["temp"][4]) where IsMatch(metric.name, "^gloo_gateway_.*")
+      transform/gg_set_static_attributes:
+        metric_statements:
+          - context: datapoint
+            statements:
+              - set(attributes["response_code"], attributes["envoy_response_code"]) where IsMatch(metric.name, "^gloo_gateway_upstream_rq")
+              - set(attributes["source_workload"], attributes["app_kubernetes_io_name"]) where IsMatch(metric.name, "^gloo_gateway_.*")
+              - set(attributes["source_workload_namespace"], attributes["kube_namespace"]) where IsMatch(metric.name, "^gloo_gateway_.*")
+              - set(attributes["source_cluster"], "cluster2") where IsMatch(metric.name, "^gloo_gateway_.*")
+              - set(attributes["destination_cluster"], "cluster2") where IsMatch(metric.name, "^gloo_gateway_.*")
+      transform/gg_create_workload_ids:
+        metric_statements:
+        - context: datapoint
+          statements:
+            - set(attributes["workload_id"], Concat([attributes["source_workload"], attributes["source_workload_namespace"], attributes["source_cluster"]], ".")) where IsMatch(metric.name, "^gloo_gateway_.*")
+            - set(attributes["destination_workload_id"], Concat([attributes["destination_workload"], attributes["destination_workload_namespace"], attributes["destination_cluster"]], ".")) where IsMatch(metric.name, "^gloo_gateway_.*")
+      transform/keep_gloo_gateway_labels:
+        metric_statements:
+          - context: datapoint
+            statements:
+              - keep_keys(attributes, ["cluster","collector_pod","destination_cluster","destination_workload","destination_workload_id","destination_workload_namespace","namespace","pod_name","source_cluster","source_workload","source_workload_namespace","workload_id", "response_code"]) where IsMatch(metric.name, "^gloo_gateway.*")
+    exporters:
+      otlp:
+        endpoint: "34.162.70.211:4317"
+        tls:
+          insecure_skip_verify: true
+          server_name_override: gloo-telemetry-gateway.gloo-mesh
+      otlp/jaeger:
+        endpoint: gloo-jaeger-collector.cnp-nginx.svc:4317
+        tls:
+          insecure: true
+      # Custom exporters
+      clickhouse:
+        database: default
+        endpoint: tcp://clickhouse.gloo-mesh.svc:9000?dial_timeout=10s&compress=lz4
+        logs_table_name: gloo_api_logs
+        password: default
+        retry_on_failure:
+          enabled: true
+          initial_interval: 1s
+          max_elapsed_time: 5m
+          max_interval: 30s
+        timeout: 5s
+        ttl: 72h
+        username: default
+      prometheus:
+        add_metric_suffixes: false
+        endpoint: 0.0.0.0:9091
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    service:
+      telemetry:
+        logs:
+          encoding: json
+        metrics:
+          address: 0.0.0.0:8888
+      extensions:
+        - health_check
+      pipelines:
+        logs/analyzer:
+          processors:
+          - resource/cluster_context
+          - batch/logs
+          receivers:
+          - otlp
+          exporters:
+          - otlp
+        metrics/ui:
+          processors:
+          - memory_limiter
+          - transform/keep_istio_labels
+          - transform/keep_otelcol_labels
+          - metricstransform/gg_gloo_gateway_metrics
+          - filter/min
+          - transform/gg_envoy_cluster_names_to_workload_names
+          - transform/gg_set_static_attributes
+          - transform/gg_create_workload_ids
+          - transform/keep_gloo_gateway_labels
+          - gloo_metrics_processor
+          - batch
+          receivers:
+          - prometheus
+          exporters:
+          - otlp
+---
+# Source: gloo-platform/charts/telemetryCollector/templates/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gloo-telemetry-collector
+  labels:
+    helm.sh/chart: telemetryCollector-0.93.3
+    app.kubernetes.io/name: telemetryCollector
+    app.kubernetes.io/instance: gloo-platform
+    app.kubernetes.io/version: "0.102.1"
+    app.kubernetes.io/managed-by: Helm
+    app: gloo-telemetry-collector-agent
+rules:
+  - apiGroups:
+    - ""
+    resources:
+    - nodes
+    - nodes/proxy
+    - nodes/metrics
+    - services
+    - endpoints
+    - pods
+    - ingresses
+    - configmaps
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - extensions
+    - networking.k8s.io
+    resources:
+    - ingresses/status
+    - ingresses
+    verbs:
+    - get
+    - list
+    - watch
+  - nonResourceURLs:
+    - /metrics
+    verbs:
+    - get
+---
+# Source: gloo-platform/templates/rbac.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: gloo-mesh-agent-cnp-nginx
+  labels:
+    app: gloo-mesh-agent
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - namespaces
+  - pods
+  - resourcequotas
+  - secrets
+  - serviceaccounts
+  - services
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - configmaps/status
+  - namespaces/status
+  - nodes/status
+  - pods/status
+  - serviceaccounts/status
+  - services/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - admin.gloo.solo.io
+  resources:
+  - dashboards
+  - extauthservers
+  - gatewaylifecyclemanagers
+  - insightsconfigs
+  - istiolifecyclemanagers
+  - kubernetesclusters
+  - ratelimitserverconfigs
+  - ratelimitserversettings
+  - roottrustpolicies
+  - waypointlifecyclemanagers
+  - workspaces
+  - workspacesettings
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - admin.gloo.solo.io
+  resources:
+  - dashboards/status
+  - extauthservers/status
+  - gatewaylifecyclemanagers/status
+  - insightsconfigs/status
+  - istiolifecyclemanagers/status
+  - kubernetesclusters/status
+  - ratelimitserverconfigs/status
+  - ratelimitserversettings/status
+  - roottrustpolicies/status
+  - waypointlifecyclemanagers/status
+  - workspaces/status
+  - workspacesettings/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  - validatingwebhookconfigurations
+  verbs:
+  - '*'
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations/status
+  - validatingwebhookconfigurations/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - '*'
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - apimanagement.gloo.solo.io
+  resources:
+  - apidocs
+  verbs:
+  - '*'
+- apiGroups:
+  - apimanagement.gloo.solo.io
+  resources:
+  - apidocs/status
+  - apiproducts/status
+  - apischemadiscoveries/status
+  - graphqlresolvermaps/status
+  - graphqlschemas/status
+  - graphqlstitchedschemas/status
+  - portalgroups/status
+  - portals/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - apimanagement.gloo.solo.io
+  resources:
+  - apiproducts
+  - apischemadiscoveries
+  - graphqlresolvermaps
+  - graphqlschemas
+  - graphqlstitchedschemas
+  - portalgroups
+  - portals
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  verbs:
+  - '*'
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets/status
+  - deployments/status
+  - replicasets/status
+  - statefulsets/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - apps
+  resources:
+  - replicasets
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - '*'
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumnetworkpolicies
+  verbs:
+  - '*'
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumnetworkpolicies/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - '*'
+- apiGroups:
+  - enterprise.gloo.solo.io
+  resources:
+  - authconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - enterprise.gloo.solo.io
+  resources:
+  - authconfigs/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - extauth.solo.io
+  resources:
+  - authconfigs
+  verbs:
+  - '*'
+- apiGroups:
+  - extauth.solo.io
+  resources:
+  - authconfigs/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - extensions.policy.gloo.solo.io
+  resources:
+  - wasmdeploymentpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions.policy.gloo.solo.io
+  resources:
+  - wasmdeploymentpolicies/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - gateway.gloo.solo.io
+  resources:
+  - gatewayparameters
+  verbs:
+  - '*'
+- apiGroups:
+  - gateway.gloo.solo.io
+  resources:
+  - gatewayparameters/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses
+  - gateways
+  - httproutes
+  - referencegrants
+  verbs:
+  - '*'
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses/status
+  - gateways/status
+  - httproutes/status
+  - tcproutes/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - tcproutes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.solo.io
+  resources:
+  - gateways
+  - httpgateways
+  - httplisteneroptions
+  - listeneroptions
+  - routeoptions
+  - routetables
+  - tcpgateways
+  - virtualhostoptions
+  - virtualservices
+  verbs:
+  - '*'
+- apiGroups:
+  - gateway.solo.io
+  resources:
+  - gateways/status
+  - httplisteneroptions/status
+  - listeneroptions/status
+  - routeoptions/status
+  - routetables/status
+  - virtualhostoptions/status
+  - virtualservices/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - gloo.solo.io
+  resources:
+  - proxies
+  - settings
+  - upstreamgroups
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gloo.solo.io
+  resources:
+  - proxies/status
+  - settings/status
+  - upstreamgroups/status
+  - upstreams/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - gloo.solo.io
+  resources:
+  - upstreams
+  verbs:
+  - '*'
+- apiGroups:
+  - infrastructure.gloo.solo.io
+  resources:
+  - cloudproviders
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.gloo.solo.io
+  resources:
+  - cloudproviders/status
+  - cloudresources/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - infrastructure.gloo.solo.io
+  resources:
+  - cloudresources
+  verbs:
+  - '*'
+- apiGroups:
+  - install.istio.io
+  resources:
+  - istiooperators
+  verbs:
+  - '*'
+- apiGroups:
+  - install.istio.io
+  resources:
+  - istiooperators/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - internal.gloo.solo.io
+  resources:
+  - certificaterequests
+  - clusteristioinstallations
+  - discoveredcnis
+  - discoveredgateways
+  - issuedcertificates
+  - meshes
+  - podbouncedirectives
+  - portalconfigs
+  - spireregistrationentries
+  - virtualservicebackups
+  - xdsconfigs
+  verbs:
+  - '*'
+- apiGroups:
+  - internal.gloo.solo.io
+  resources:
+  - certificaterequests/status
+  - discoveredcnis/status
+  - discoveredgateways/status
+  - issuedcertificates/status
+  - meshes/status
+  - podbouncedirectives/status
+  - portalconfigs/status
+  - spireregistrationentries/status
+  - virtualservicebackups/status
+  - xdsconfigs/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - k8s.cni.cncf.io
+  resources:
+  - network-attachment-definitions
+  verbs:
+  - '*'
+- apiGroups:
+  - networking.gloo.solo.io
+  resources:
+  - externalendpoints
+  - externalservices
+  - externalworkloads
+  - progressivedeliveries
+  - routetables
+  - virtualdestinations
+  - virtualgateways
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - networking.gloo.solo.io
+  resources:
+  - externalendpoints/status
+  - externalservices/status
+  - externalworkloads/status
+  - progressivedeliveries/status
+  - routetables/status
+  - virtualdestinations/status
+  - virtualgateways/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - networking.istio.io
+  resources:
+  - destinationrules
+  - envoyfilters
+  - gateways
+  - serviceentries
+  - sidecars
+  - virtualservices
+  - workloadentries
+  - workloadgroups
+  verbs:
+  - '*'
+- apiGroups:
+  - networking.istio.io
+  resources:
+  - destinationrules/status
+  - envoyfilters/status
+  - gateways/status
+  - serviceentries/status
+  - sidecars/status
+  - virtualservices/status
+  - workloadentries/status
+  - workloadgroups/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - '*'
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - observability.policy.gloo.solo.io
+  resources:
+  - accesslogpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - observability.policy.gloo.solo.io
+  resources:
+  - accesslogpolicies/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - operator.gloo.solo.io
+  resources:
+  - servicemeshcontrollers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - operator.gloo.solo.io
+  resources:
+  - servicemeshcontrollers/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - '*'
+- apiGroups:
+  - ratelimit.solo.io
+  resources:
+  - ratelimitconfigs
+  verbs:
+  - '*'
+- apiGroups:
+  - ratelimit.solo.io
+  resources:
+  - ratelimitconfigs/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  - clusterroles
+  - rolebindings
+  - roles
+  verbs:
+  - '*'
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings/status
+  - clusterroles/status
+  - rolebindings/status
+  - roles/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - resilience.policy.gloo.solo.io
+  resources:
+  - activehealthcheckpolicies
+  - adaptiverequestconcurrencypolicies
+  - connectionpolicies
+  - failoverpolicies
+  - faultinjectionpolicies
+  - graphqlpersistedquerycachepolicies
+  - listenerconnectionpolicies
+  - outlierdetectionpolicies
+  - retrytimeoutpolicies
+  - trimproxyconfigpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - resilience.policy.gloo.solo.io
+  resources:
+  - activehealthcheckpolicies/status
+  - adaptiverequestconcurrencypolicies/status
+  - connectionpolicies/status
+  - failoverpolicies/status
+  - faultinjectionpolicies/status
+  - graphqlpersistedquerycachepolicies/status
+  - listenerconnectionpolicies/status
+  - outlierdetectionpolicies/status
+  - retrytimeoutpolicies/status
+  - trimproxyconfigpolicies/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - security.istio.io
+  resources:
+  - authorizationpolicies
+  - peerauthentications
+  verbs:
+  - '*'
+- apiGroups:
+  - security.istio.io
+  resources:
+  - authorizationpolicies/status
+  - peerauthentications/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - security.policy.gloo.solo.io
+  resources:
+  - accesspolicies
+  - clienttlspolicies
+  - corspolicies
+  - csrfpolicies
+  - dlppolicies
+  - extauthpolicies
+  - graphqlallowedquerypolicies
+  - jwtpolicies
+  - wafpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - security.policy.gloo.solo.io
+  resources:
+  - accesspolicies/status
+  - clienttlspolicies/status
+  - corspolicies/status
+  - csrfpolicies/status
+  - dlppolicies/status
+  - extauthpolicies/status
+  - graphqlallowedquerypolicies/status
+  - jwtpolicies/status
+  - wafpolicies/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - telemetry.istio.io
+  resources:
+  - telemetries
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - telemetry.istio.io
+  resources:
+  - telemetries/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - trafficcontrol.policy.gloo.solo.io
+  resources:
+  - headermanipulationpolicies
+  - httpbufferpolicies
+  - loadbalancerpolicies
+  - mirrorpolicies
+  - proxyprotocolpolicies
+  - ratelimitclientconfigs
+  - ratelimitpolicies
+  - transformationpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - trafficcontrol.policy.gloo.solo.io
+  resources:
+  - headermanipulationpolicies/status
+  - httpbufferpolicies/status
+  - loadbalancerpolicies/status
+  - mirrorpolicies/status
+  - proxyprotocolpolicies/status
+  - ratelimitclientconfigs/status
+  - ratelimitpolicies/status
+  - transformationpolicies/status
+  verbs:
+  - get
+  - update
+
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - namespaces
+  - nodes
+  - pods
+  - secrets
+  - serviceaccounts
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  - validatingwebhookconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions.istio.io
+  resources:
+  - wasmplugins
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - networking.istio.io
+  resources:
+  - destinationrules
+  - envoyfilters
+  - gateways
+  - proxyconfigs
+  - serviceentries
+  - sidecars
+  - virtualservices
+  - workloadentries
+  - workloadgroups
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - security.istio.io
+  resources:
+  - authorizationpolicies
+  - peerauthentications
+  - requestauthentications
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - telemetry.istio.io
+  resources:
+  - telemetries
+  verbs:
+  - get
+  - list
+  - watch
+---
+# Source: gloo-platform/templates/rbac.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: gloo-mesh-agent-gloo-platform-cnp-nginx-namespaced
+  labels:
+    app: gloo-mesh-agent
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - secrets/status
+  verbs:
+  - get
+  - update
+---
+# Source: gloo-platform/charts/telemetryCollector/templates/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gloo-telemetry-collector
+  labels:
+    helm.sh/chart: telemetryCollector-0.93.3
+    app.kubernetes.io/name: telemetryCollector
+    app.kubernetes.io/instance: gloo-platform
+    app.kubernetes.io/version: "0.102.1"
+    app.kubernetes.io/managed-by: Helm
+    app: gloo-telemetry-collector-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: gloo-telemetry-collector
+subjects:
+- kind: ServiceAccount
+  name: gloo-telemetry-collector
+  namespace: cnp-nginx
+---
+# Source: gloo-platform/templates/rbac.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: gloo-mesh-agent-cnp-nginx
+  labels:
+    app: gloo-mesh-agent
+subjects:
+- kind: ServiceAccount
+  name: gloo-mesh-agent
+  namespace: cnp-nginx
+roleRef:
+  kind: ClusterRole
+  name: gloo-mesh-agent-cnp-nginx
+  apiGroup: rbac.authorization.k8s.io
+
+#
+#
+#
+---
+# Source: gloo-platform/templates/rbac.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: gloo-mesh-agent-gloo-platform-cnp-nginx-namespaced
+  labels:
+    app: gloo-mesh-agent
+subjects:
+- kind: ServiceAccount
+  name: gloo-mesh-agent
+  namespace: cnp-nginx
+roleRef:
+  kind: ClusterRole
+  name: gloo-mesh-agent-gloo-platform-cnp-nginx-namespaced
+  apiGroup: rbac.authorization.k8s.io
+# Rbac manifests for gloo-mesh-ui
+
+# Rbac manifests for gloo-mesh-portal-server
+
+# Rbac manifests for gloo-spire-server
+
+# Rbac manifests for gloo-mesh-analyzer
+---
+# Source: gloo-platform/charts/telemetryCollector/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: gloo-telemetry-collector
+  namespace: cnp-nginx
+  labels:
+    helm.sh/chart: telemetryCollector-0.93.3
+    app.kubernetes.io/name: telemetryCollector
+    app.kubernetes.io/instance: gloo-platform
+    app.kubernetes.io/version: "0.102.1"
+    app.kubernetes.io/managed-by: Helm
+    app: gloo-telemetry-collector-agent
+    component: agent-collector
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    
+    - name: jaeger-compact
+      port: 6831
+      targetPort: 6831
+      protocol: UDP
+    - name: jaeger-grpc
+      port: 14250
+      targetPort: 14250
+      protocol: TCP
+    - name: jaeger-thrift
+      port: 14268
+      targetPort: 14268
+      protocol: TCP
+    - name: otlp
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+      appProtocol: grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+    - name: zipkin
+      port: 9411
+      targetPort: 9411
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: telemetryCollector
+    app.kubernetes.io/instance: gloo-platform
+    component: agent-collector
+  internalTrafficPolicy: Local
+---
+# Source: gloo-platform/templates/deployment.yaml
+# Service for gloo-mesh-agent
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: gloo-mesh-agent
+  annotations:
+    app.kubernetes.io/name: gloo-mesh-agent
+  name: gloo-mesh-agent
+  namespace: cnp-nginx
+spec:
+  selector:
+    app: gloo-mesh-agent
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 9988
+  - name: stats
+    port: 9093
+  - name: grpc
+    port: 9977
+  - name: healthcheck
+    port: 8091
+  - name: grpc-internaladmin
+    port: 31337
+---
+# Source: gloo-platform/charts/telemetryCollector/templates/daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: gloo-telemetry-collector-agent
+  namespace: cnp-nginx
+  labels:
+    helm.sh/chart: telemetryCollector-0.93.3
+    app.kubernetes.io/name: telemetryCollector
+    app.kubernetes.io/instance: gloo-platform
+    app.kubernetes.io/version: "0.102.1"
+    app.kubernetes.io/managed-by: Helm
+    app: gloo-telemetry-collector-agent
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: telemetryCollector
+      app.kubernetes.io/instance: gloo-platform
+      component: agent-collector
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        checksum/config: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9091"
+        prometheus.io/scrape: "true"
+      labels:
+        app.kubernetes.io/name: telemetryCollector
+        app.kubernetes.io/instance: gloo-platform
+        component: agent-collector
+        app: gloo-telemetry-collector-agent
+    spec:
+      
+      serviceAccountName: gloo-telemetry-collector
+      securityContext:
+        {}
+      containers:
+        - name: telemetrycollector
+          command:
+            - /gloo-otel-collector
+          args:
+            - --config=/conf/relay.yaml
+          securityContext:
+            {}
+          image: "gcr.io/gloo-mesh/otel-collector:0.2.3"
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - name: jaeger-compact
+              containerPort: 6831
+              protocol: UDP
+            - name: jaeger-grpc
+              containerPort: 14250
+              protocol: TCP
+            - name: jaeger-thrift
+              containerPort: 14268
+              protocol: TCP
+            - name: otlp
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            - name: zipkin
+              containerPort: 9411
+              protocol: TCP
+          env:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: KUBE_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: REDIS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  key: username
+                  name: redis-auth-secrets
+                  optional: true
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: redis-auth-secrets
+                  optional: true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+          resources:
+            requests:
+              cpu: 100m
+              memory: 300Mi
+          volumeMounts:
+            - name: varlogpods
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - mountPath: /etc/otel-certs
+              name: root-ca
+              readOnly: true
+            - mountPath: /conf
+              name: telemetry-configmap
+            - mountPath: /var/run/cilium
+              name: cilium-run
+      volumes:
+        - name: varlogpods
+          hostPath:
+            path: /var/log/pods
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
+        - name: root-ca
+          projected:
+            sources:
+            - secret:
+                name: gloo-telemetry-collector-ca-certs
+                optional: true
+            - secret:
+                name: relay-root-tls-secret
+                optional: true
+        - configMap:
+            items:
+            - key: relay
+              path: relay.yaml
+            name: gloo-telemetry-collector-config
+          name: telemetry-configmap
+        - hostPath:
+            path: /var/run/cilium
+            type: DirectoryOrCreate
+          name: cilium-run
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+        - effect: NoExecute
+          key: node.kubernetes.io/not-ready
+          operator: Exists
+        - effect: NoExecute
+          key: node.kubernetes.io/unreachable
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/memory-pressure
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/pid-pressure
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/unschedulable
+          operator: Exists
+      hostNetwork: false
+---
+# Source: gloo-platform/templates/deployment.yaml
+# Deployment manifest for gloo-mesh-agent
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: gloo-mesh-agent
+  annotations:
+    app.kubernetes.io/name: gloo-mesh-agent
+  name: gloo-mesh-agent
+  namespace: cnp-nginx
+spec:
+  selector:
+    matchLabels:
+      app: gloo-mesh-agent
+  template:
+    metadata:
+      labels:
+        app: gloo-mesh-agent
+      annotations:
+        app.kubernetes.io/name: gloo-mesh-agent
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9093"
+        prometheus.io/scrape: "true"
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: gloo-mesh-agent
+      volumes:
+      - name: istio-token
+        projected:
+          defaultMode: 420
+          sources:
+          - serviceAccountToken:
+              audience: istio-ca
+              expirationSeconds: 600
+              path: istio-token
+      containers:
+      - name: gloo-mesh-agent
+        image: gcr.io/gloo-mesh/gloo-mesh-agent:2.7.2
+        imagePullPolicy: IfNotPresent
+        args:
+        - run
+        - --cluster=cluster2
+        - --secrets-namespaces=
+        - --stats-port=9093
+        - --grpc-port=9977
+        - --http-healthcheck-port=8091
+        - --dev-logger=false
+        - --relay-address=34.162.252.15:9900
+        - --relay-authority=gloo-mesh-mgmt-server.cnp-nginx
+        - --relay-client-cert-secret-name=relay-client-tls-secret
+        - --relay-client-cert-secret-namespace=cnp-nginx
+        - --relay-client-cert-rotation-grace-period-ratio=
+        - --relay-root-cert-secret-name=relay-root-tls-secret
+        - --relay-root-cert-secret-namespace=cnp-nginx
+        - --relay-identity-token-secret-name=relay-identity-token-secret
+        - --relay-identity-token-secret-namespace=cnp-nginx
+        - --relay-identity-token-secret-key=token
+        - --max-grpc-message-size=4294967295
+        - --metrics-buffer-size=50
+        - --access-logs-buffer-size=50
+        - --relay-insecure=false
+        - --verbose=false
+        - --leader-election=true
+        - --read-only-generated-resources=false
+        - --feature-gates=SafeMode=true
+        ports:
+        - name: stats
+          containerPort: 9093
+        - name: http
+          containerPort: 9988
+        - name: grpc
+          containerPort: 9977
+        - name: healthcheck
+          containerPort: 8091
+        - name: internaladmin
+          containerPort: 31337
+        env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: K8S_MEM_LIMIT
+            valueFrom:
+              resourceFieldRef:
+                divisor: "1"
+                resource: limits.memory
+          - name: GOMAXPROCS
+            valueFrom:
+              resourceFieldRef:
+                divisor: "1"
+                resource: limits.cpu
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10101
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8091
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+      - name: gloo-mesh-analyzer
+        image: gcr.io/gloo-mesh/gloo-mesh-analyzer:2.7.2
+        imagePullPolicy: IfNotPresent
+        args:
+        - --cluster=cluster2
+        - --verbose=false
+        - --istio-admin-namespace=istio-system
+        - --interval=30
+        - --stats-port=9095
+        - --endpoint=gloo-telemetry-collector.cnp-nginx:4317
+        - --authority=
+        - --ca-file=
+        - --insecure=true
+        - --insecure-skip-verify=false
+        ports:
+        - name: stats
+          containerPort: 9095
+        env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: K8S_MEM_LIMIT
+            valueFrom:
+              resourceFieldRef:
+                divisor: "1"
+                resource: limits.memory
+          - name: GOMAXPROCS
+            valueFrom:
+              resourceFieldRef:
+                divisor: "1"
+                resource: limits.cpu
+        volumeMounts:
+        - mountPath: /var/run/secrets/tokens
+          name: istio-token
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10101
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+---
+# Source: gloo-platform/templates/cert.yaml
+# Declare variable to store CA object, whether it's generated anew or built from existing values
+---
+# Source: gloo-platform/templates/deployment.yaml
+# Code generated by skv2. DO NOT EDIT.
+---
+# Source: gloo-platform/templates/deployment.yaml
+---
+---
+# Source: gloo-platform/templates/deployment.yaml
+---
+---
+# Source: gloo-platform/templates/deployment.yaml
+---
+---
+# Source: gloo-platform/templates/deployment.yaml
+---
+---
+# Source: gloo-platform/templates/deployment.yaml
+---
+---
+# Source: gloo-platform/templates/deployment.yaml
+---
+---
+# Source: gloo-platform/templates/deployment.yaml
+---
+---
+# Source: gloo-platform/templates/deployment.yaml
+---
+---
+# Source: gloo-platform/templates/deployment.yaml
+---
+---
+# Source: gloo-platform/templates/deployment.yaml
+---
+---
+# Source: gloo-platform/templates/deployment.yaml
+---
+---
+# Source: gloo-platform/templates/envoy-configmap.yaml
+# ConfigMap containing envoy yaml
+---
+# Source: gloo-platform/templates/nginx-default-conf-configmap.yaml
+# ConfigMap containing nginx default.conf
+---
+# Source: gloo-platform/templates/rbac.yaml
+# Code generated by skv2. DO NOT EDIT.
+
+
+# Rbac manifests for gloo-mesh-mgmt-server
+
+# Rbac manifests for gloo-mesh-agent
+---
+# Source: gloo-platform/templates/spire-server-configmap.yaml
+# ConfigMap containing spire-server config
+---
+# Source: gloo-platform/templates/ui-auth.yaml
+# Secret values for auth config
+

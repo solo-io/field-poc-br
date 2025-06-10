@@ -725,9 +725,54 @@ helm upgrade -i gloo-platform gloo-platform/gloo-platform -n cnp-nginx --version
 
 Then, register cluster2 as a workload cluster to cluster1:
 ```bash
-export TELEMETRY_GATEWAY_ADDRESS=$(kubectl get svc -n gloo-mesh gloo-telemetry-gateway --context $CLUSTER1 -o jsonpath="{.status.loadBalancer.ingress[0]['hostname','ip']}"):4317
+export TELEMETRY_GATEWAY_ADDRESS=$(kubectl get svc -n cnp-nginx gloo-telemetry-gateway --context $CLUSTER1 -o jsonpath="{.status.loadBalancer.ingress[0]['hostname','ip']}"):4317
 
-meshctl cluster register cluster2  --kubecontext $CLUSTER1 --profiles gloo-core-agent --remote-context $CLUSTER2 --telemetry-server-address $TELEMETRY_GATEWAY_ADDRESS
+meshctl cluster register cluster2  --kubecontext $CLUSTER1 --profiles gloo-core-agent --remote-namespace cnp-nginx --remote-context $CLUSTER2 --telemetry-server-address $TELEMETRY_GATEWAY_ADDRESS
+```
+
+Alternatively, use helm to set up the remote cluster
+
+```
+export TELEMETRY_GATEWAY_ADDRESS=$(kubectl get svc -n cnp-nginx gloo-telemetry-gateway --context $CLUSTER1 -o jsonpath="{.status.loadBalancer.ingress[0]['hostname','ip']}"):4317
+export MANAGEMENT_SERVER_ADDRESS=$(kubectl get svc -n cnp-nginx gloo-mesh-mgmt-server --context $CLUSTER1 -o jsonpath="{.status.loadBalancer.ingress[0]['hostname','ip']}"):9900
+
+kubectl apply --context $CLUSTER1 -f- <<EOF
+apiVersion: admin.gloo.solo.io/v2
+kind: KubernetesCluster
+metadata:
+   name: $CLUSTER2_NAME
+   namespace: cnp-nginx
+spec:
+   clusterDomain: cluster.local
+EOF
+
+kubectl get secret relay-root-tls-secret -n cnp-nginx --context $CLUSTER1 -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt
+kubectl create secret generic relay-root-tls-secret -n cnp-nginx --context $CLUSTER2 --from-file ca.crt=ca.crt
+rm ca.crt
+
+kubectl get secret relay-identity-token-secret -n cnp-nginx --context $CLUSTER1 -o jsonpath='{.data.token}' | base64 -d > token
+kubectl create secret generic relay-identity-token-secret -n cnp-nginx --context $CLUSTER2 --from-file token=token
+rm token
+
+helm upgrade --install gloo-platform-crds gloo-platform/gloo-platform-crds \
+ --namespace=cnp-nginx \
+ --version=$GLOO_VERSION \
+ --set installEnterpriseCrds=false \
+ --kube-context $CLUSTER2
+
+helm upgrade --install gloo-platform gloo-platform/gloo-platform \
+  --kube-context $CLUSTER2 \
+  -n cnp-nginx \
+  --version $GLOO_VERSION \
+  --set common.cluster=$CLUSTER2_NAME \
+  --set glooAgent.enabled=true \
+  --set glooAgent.authority=gloo-meshmgmt-server.cnp-nginx \
+  --set glooAgent.relay.serverAddress=$MANAGEMENT_SERVER_ADDRESS \
+  --set glooAnalyzer.enabled=true \
+  --set installEnterpriseCrds=false \
+  --set telemetryCollector.enabled=true \
+  --set telemetryCollector.config.exporters.otlp.endpoint=$TELEMETRY_GATEWAY_ADDRESS \
+  --set telemetryCollectorCustomization.skipVerify=true
 ```
 
 Launch the UI:
