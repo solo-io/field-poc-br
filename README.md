@@ -740,7 +740,7 @@ kubectl apply --context $CLUSTER1 -f- <<EOF
 apiVersion: admin.gloo.solo.io/v2
 kind: KubernetesCluster
 metadata:
-   name: $CLUSTER2_NAME
+   name: cluster2
    namespace: cnp-nginx
 spec:
    clusterDomain: cluster.local
@@ -764,7 +764,7 @@ helm upgrade --install gloo-platform gloo-platform/gloo-platform \
   --kube-context $CLUSTER2 \
   -n cnp-nginx \
   --version 2.7.2 \
-  --set common.cluster=$CLUSTER2_NAME \
+  --set common.cluster=cluster2 \
   --set glooAgent.enabled=true \
   --set glooAgent.authority=gloo-meshmgmt-server.cnp-nginx \
   --set glooAgent.relay.serverAddress=$MANAGEMENT_SERVER_ADDRESS \
