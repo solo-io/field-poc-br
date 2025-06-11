@@ -756,14 +756,14 @@ rm token
 
 helm upgrade --install gloo-platform-crds gloo-platform/gloo-platform-crds \
  --namespace=cnp-nginx \
- --version=$GLOO_VERSION \
+ --version=2.7.2 \
  --set installEnterpriseCrds=false \
  --kube-context $CLUSTER2
 
 helm upgrade --install gloo-platform gloo-platform/gloo-platform \
   --kube-context $CLUSTER2 \
   -n cnp-nginx \
-  --version $GLOO_VERSION \
+  --version 2.7.2 \
   --set common.cluster=$CLUSTER2_NAME \
   --set glooAgent.enabled=true \
   --set glooAgent.authority=gloo-meshmgmt-server.cnp-nginx \
