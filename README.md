@@ -774,25 +774,29 @@ helm upgrade --install gloo-platform gloo-platform/gloo-platform \
   --version 2.7.2 \
   --set common.cluster=cluster2 \
   --set glooAgent.enabled=true \
+  --set glooAgent.image.registry=harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh \
   --set glooAgent.authority=gloo-mesh-mgmt-server.cnp-nginx \
   --set glooAgent.relay.serverAddress=$MANAGEMENT_SERVER_ADDRESS \
-  --set glooAgent.deployment.resources.requests.cpu=100m \
-  --set glooAgent.deployment.resources.requests.memory=128Mi \
-  --set glooAgent.deployment.resources.limits.cpu=500m \
-  --set glooAgent.deployment.resources.limits.memory=256Mi \
+  --set glooAgent.resources.requests.cpu=100m \
+  --set glooAgent.resources.requests.memory=128Mi \
+  --set glooAgent.resources.limits.cpu=500m \
+  --set glooAgent.resources.limits.memory=256Mi \
   --set glooAnalyzer.enabled=true \
+  --set glooAnalyzer.image.registry=harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh \
   --set glooAnalyzer.deployment.resources.requests.cpu=100m \
   --set glooAnalyzer.deployment.resources.requests.memory=128Mi \
   --set glooAnalyzer.deployment.resources.limits.cpu=500m \
   --set glooAnalyzer.deployment.resources.limits.memory=256Mi \
   --set installEnterpriseCrds=false \
   --set telemetryCollector.enabled=true \
+  --set telemetryCollector.resources.requests.cpu=100m \
+  --set telemetryCollector.resources.requests.memory=128Mi \
+  --set telemetryCollector.resources.limits.cpu=500m \
+  --set telemetryCollector.resources.limits.memory=256Mi \
+  --set telemetryCollector.image.repositorharbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh/otel-collector \
   --set telemetryCollector.config.exporters.otlp.endpoint=$TELEMETRY_GATEWAY_ADDRESS \
   --set telemetryCollectorCustomization.skipVerify=true \
-  --set telemetryCollector.daemonSet.resources.requests.cpu=100m \
-  --set telemetryCollector.daemonSet.resources.requests.memory=128Mi \
-  --set telemetryCollector.daemonSet.resources.limits.cpu=500m \
-  --set telemetryCollector.daemonSet.resources.limits.memory=256Mi
+
 ```
 
 Launch the UI:
