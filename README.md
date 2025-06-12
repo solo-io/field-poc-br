@@ -778,7 +778,7 @@ helm upgrade --install gloo-platform gloo-platform/gloo-platform \
 
 Launch the UI:
 ```
-meshctl dashboard --kube-context=$CLUSTER1 -n cnp-nginx
+meshctl dashboard --kubecontext=$CLUSTER1 -n cnp-nginx
 ```
 ![Gloo Mesh UI](gloo-mesh-ui.png)
 
