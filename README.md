@@ -721,7 +721,14 @@ helm repo update
 
 helm upgrade -i gloo-platform-crds gloo-platform/gloo-platform-crds -n cnp-nginx --kube-context=$CLUSTER1 --version=2.7.2
 helm upgrade -i gloo-platform gloo-platform/gloo-platform -n cnp-nginx --kube-context=$CLUSTER1 --version 2.7.2 --values mgmt-values.yaml \
-  --set licensing.glooMeshLicenseKey=$GLOO_MESH_LICENSE_KEY
+  --set licensing.glooMeshLicenseKey=$GLOO_MESH_LICENSE_KEY \
+  -f- <<EOF
+glooUi:
+  tracing:
+    basePath: ""
+    endpoint: ""
+    port: 0
+EOF
 ```
 
 Then, register cluster2 as a workload cluster to cluster1:
@@ -773,14 +780,7 @@ helm upgrade --install gloo-platform gloo-platform/gloo-platform \
   --set installEnterpriseCrds=false \
   --set telemetryCollector.enabled=true \
   --set telemetryCollector.config.exporters.otlp.endpoint=$TELEMETRY_GATEWAY_ADDRESS \
-  --set telemetryCollectorCustomization.skipVerify=true \
-  -f- <<EOF
-glooUi:
-  tracing:
-    basePath: ""
-    endpoint: ""
-    port: 0
-EOF
+  --set telemetryCollectorCustomization.skipVerify=true
 ```
 
 Launch the UI:
