@@ -793,7 +793,7 @@ helm upgrade --install gloo-platform gloo-platform/gloo-platform \
   --set telemetryCollector.resources.requests.memory=128Mi \
   --set telemetryCollector.resources.limits.cpu=500m \
   --set telemetryCollector.resources.limits.memory=256Mi \
-  --set telemetryCollector.image.repositorharbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh/otel-collector \
+  --set telemetryCollector.image.repository=harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh/otel-collector \
   --set telemetryCollector.config.exporters.otlp.endpoint=$TELEMETRY_GATEWAY_ADDRESS \
   --set telemetryCollectorCustomization.skipVerify=true \
 
