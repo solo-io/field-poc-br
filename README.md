@@ -528,6 +528,7 @@ done
 Apply the following Kubernetes Gateway API resources to cluster1 to expose productpage service using an Istio gateway:
 
 ```yaml
+kubectl apply --context $CLUSTER1 -f- <<EOF
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -576,7 +577,7 @@ spec:
       group: networking.istio.io
       name: productpage.service-mesh.mesh.internal
       port: 9080
-
+EOF
 ```
 
 Wait until a LB IP gets assigned to bookinfo-gateway-istio svc and then visit the app!
@@ -718,8 +719,8 @@ Cluster1 will act as the management cluster and workload cluster:
 helm repo add gloo-platform https://storage.googleapis.com/gloo-platform/helm-charts
 helm repo update
 
-helm upgrade -i gloo-platform-crds gloo-platform/gloo-platform-crds -n cnp-nginx --version=2.7.2
-helm upgrade -i gloo-platform gloo-platform/gloo-platform -n cnp-nginx --version 2.7.2 --values mgmt-values.yaml \
+helm upgrade -i gloo-platform-crds gloo-platform/gloo-platform-crds -n cnp-nginx --kube-context=$CLUSTER1 --version=2.7.2
+helm upgrade -i gloo-platform gloo-platform/gloo-platform -n cnp-nginx --kube-context=$CLUSTER1 --version 2.7.2 --values mgmt-values.yaml \
   --set licensing.glooMeshLicenseKey=$GLOO_MESH_LICENSE_KEY
 ```
 
