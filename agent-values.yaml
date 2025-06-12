@@ -1,0 +1,39 @@
+common:
+  cluster: cluster2
+glooAgent:
+  enabled: true
+  image:
+    registry: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh
+  authority: gloo-mesh-mgmt-server.cnp-nginx
+  resources:
+    requests: 
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+glooAnalyzer:
+  enabled: true
+  image:
+    registry: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh
+  deployment:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+installEnterpriseCrds: false
+telemetryCollector:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  image:
+    repository: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh/otel-collector
+telemetryCollectorCustomization.skipVerify: true

@@ -35,6 +35,10 @@ glooMgmtServer:
     limits:
       cpu: 1
       memory: 512Mi
+  serviceOverrides:
+    metadata:
+      annotations:
+        service.beta.kubernetes.io/azure-load-balancer-internal: "true" 
 glooInsightsEngine:
   enabled: true
   resources:
@@ -115,6 +119,9 @@ telemetryGateway:
     limits:
       cpu: 500m
       memory: 256Mi
+  service:
+    annotations:
+      service.beta.kubernetes.io/azure-load-balancer-internal: "true" 
 telemetryGatewayCustomization:
   pipelines:
     traces/jaeger:
