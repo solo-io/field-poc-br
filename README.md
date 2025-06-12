@@ -774,7 +774,7 @@ helm upgrade --install gloo-platform gloo-platform/gloo-platform \
   --version 2.7.2 \
   --values agent-values.yaml \
   --set glooAgent.relay.serverAddress=$MANAGEMENT_SERVER_ADDRESS \
-  --set telemetryCollector.config.exporters.otlp.endpoint=$TELEMETRY_GATEWAY_ADDRESS \
+  --set telemetryCollector.config.exporters.otlp.endpoint=$TELEMETRY_GATEWAY_ADDRESS
 ```
 
 Launch the UI:

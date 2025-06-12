@@ -66,7 +66,7 @@ glooUi:
       memory: 64Mi
     limits:
       cpu: 250m
-      memory: 128Mi
+      memory: 256Mi
 prometheus:
   enabled: true
   server:
