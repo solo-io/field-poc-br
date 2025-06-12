@@ -776,11 +776,23 @@ helm upgrade --install gloo-platform gloo-platform/gloo-platform \
   --set glooAgent.enabled=true \
   --set glooAgent.authority=gloo-mesh-mgmt-server.cnp-nginx \
   --set glooAgent.relay.serverAddress=$MANAGEMENT_SERVER_ADDRESS \
+  --set glooAgent.deployment.resources.requests.cpu=100m \
+  --set glooAgent.deployment.resources.requests.memory=128Mi \
+  --set glooAgent.deployment.resources.limits.cpu=500m \
+  --set glooAgent.deployment.resources.limits.memory=256Mi \
   --set glooAnalyzer.enabled=true \
+  --set glooAnalyzer.deployment.resources.requests.cpu=100m \
+  --set glooAnalyzer.deployment.resources.requests.memory=128Mi \
+  --set glooAnalyzer.deployment.resources.limits.cpu=500m \
+  --set glooAnalyzer.deployment.resources.limits.memory=256Mi \
   --set installEnterpriseCrds=false \
   --set telemetryCollector.enabled=true \
   --set telemetryCollector.config.exporters.otlp.endpoint=$TELEMETRY_GATEWAY_ADDRESS \
-  --set telemetryCollectorCustomization.skipVerify=true
+  --set telemetryCollectorCustomization.skipVerify=true \
+  --set telemetryCollector.deployment.resources.requests.cpu=100m \
+  --set telemetryCollector.deployment.resources.requests.memory=128Mi \
+  --set telemetryCollector.deployment.resources.limits.cpu=500m \
+  --set telemetryCollector.deployment.resources.limits.memory=256Mi
 ```
 
 Launch the UI:
