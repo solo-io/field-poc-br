@@ -789,10 +789,10 @@ helm upgrade --install gloo-platform gloo-platform/gloo-platform \
   --set telemetryCollector.enabled=true \
   --set telemetryCollector.config.exporters.otlp.endpoint=$TELEMETRY_GATEWAY_ADDRESS \
   --set telemetryCollectorCustomization.skipVerify=true \
-  --set telemetryCollector.deployment.resources.requests.cpu=100m \
-  --set telemetryCollector.deployment.resources.requests.memory=128Mi \
-  --set telemetryCollector.deployment.resources.limits.cpu=500m \
-  --set telemetryCollector.deployment.resources.limits.memory=256Mi
+  --set telemetryCollector.daemonSet.resources.requests.cpu=100m \
+  --set telemetryCollector.daemonSet.resources.requests.memory=128Mi \
+  --set telemetryCollector.daemonSet.resources.limits.cpu=500m \
+  --set telemetryCollector.daemonSet.resources.limits.memory=256Mi
 ```
 
 Launch the UI:
