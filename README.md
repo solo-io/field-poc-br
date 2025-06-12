@@ -728,7 +728,7 @@ Then, register cluster2 as a workload cluster to cluster1:
 ```bash
 export TELEMETRY_GATEWAY_ADDRESS=$(kubectl get svc -n cnp-nginx gloo-telemetry-gateway --context $CLUSTER1 -o jsonpath="{.status.loadBalancer.ingress[0]['hostname','ip']}"):4317
 
-meshctl cluster register cluster2  --kubecontext $CLUSTER1 --profiles gloo-core-agent --remote-namespace cnp-nginx --remote-context $CLUSTER2 --telemetry-server-address $TELEMETRY_GATEWAY_ADDRESS
+meshctl cluster register cluster2  --kubecontext $CLUSTER1 -n cnp-nginx --profiles gloo-mesh-agent --remote-namespace cnp-nginx --remote-context $CLUSTER2 --telemetry-server-address $TELEMETRY_GATEWAY_ADDRESS
 ```
 
 Alternatively, use helm to set up the remote cluster
