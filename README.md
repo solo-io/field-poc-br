@@ -774,6 +774,13 @@ helm upgrade --install gloo-platform gloo-platform/gloo-platform \
   --set telemetryCollector.enabled=true \
   --set telemetryCollector.config.exporters.otlp.endpoint=$TELEMETRY_GATEWAY_ADDRESS \
   --set telemetryCollectorCustomization.skipVerify=true
+  -f- <<EOF
+glooUi:
+  tracing:
+    basePath: ""
+    endpoint: ""
+    port: 0
+EOF
 ```
 
 Launch the UI:
