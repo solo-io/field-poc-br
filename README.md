@@ -763,7 +763,7 @@ helm upgrade --install gloo-platform-crds gloo-platform/gloo-platform-crds \
 
 helm upgrade --install gloo-platform gloo-platform/gloo-platform \
   --kube-context $CLUSTER2 \
-  -n cnp-nginx \
+  --namespace cnp-nginx \
   --version 2.7.2 \
   --set common.cluster=cluster2 \
   --set glooAgent.enabled=true \
@@ -778,7 +778,7 @@ helm upgrade --install gloo-platform gloo-platform/gloo-platform \
 
 Launch the UI:
 ```
-meshctl dashboard
+meshctl dashboard --kube-context=$CLUSTER1 -n cnp-nginx
 ```
 ![Gloo Mesh UI](gloo-mesh-ui.png)
 
