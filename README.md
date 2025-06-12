@@ -774,7 +774,7 @@ helm upgrade --install gloo-platform gloo-platform/gloo-platform \
   --version 2.7.2 \
   --set common.cluster=cluster2 \
   --set glooAgent.enabled=true \
-  --set glooAgent.authority=gloo-meshmgmt-server.cnp-nginx \
+  --set glooAgent.authority=gloo-mesh-mgmt-server.cnp-nginx \
   --set glooAgent.relay.serverAddress=$MANAGEMENT_SERVER_ADDRESS \
   --set glooAnalyzer.enabled=true \
   --set installEnterpriseCrds=false \
