@@ -10,7 +10,7 @@ glooAgent:
       cpu: 100m
       memory: 128Mi
     limits:
-      cpu: 300m
+      cpu: 200m
       memory: 256Mi
 glooAnalyzer:
   enabled: true
@@ -21,7 +21,7 @@ glooAnalyzer:
       cpu: 100m
       memory: 128Mi
     limits:
-      cpu: 300m
+      cpu: 200m
       memory: 256Mi
 installEnterpriseCrds: false
 telemetryCollector:
@@ -31,7 +31,7 @@ telemetryCollector:
       cpu: 100m
       memory: 128Mi
     limits:
-      cpu: 300m
+      cpu: 200m
       memory: 256Mi
   image:
     repository: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh/otel-collector
