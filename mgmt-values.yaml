@@ -3,6 +3,8 @@ common:
 glooAgent:
   enabled: true
   runAsSidecar: true
+  image:
+    registry: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh
   relay:
     serverAddress: gloo-mesh-mgmt-server.cnp-nginx:9900
   resources:
