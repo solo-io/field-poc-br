@@ -58,9 +58,23 @@ glooUi:
     console:
       image:
         registry: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 250m
+          memory: 256Mi
     envoy:
       image:
         registry: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 250m
+          memory: 256Mi
   # serviceType: LoadBalancer
   resources:
     requests:
