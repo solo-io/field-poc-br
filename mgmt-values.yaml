@@ -73,7 +73,7 @@ glooUi:
           cpu: 50m
           memory: 64Mi
         limits:
-          cpu: 250m
+          cpu: 200m
           memory: 256Mi
   # serviceType: LoadBalancer
   resources:
@@ -88,17 +88,31 @@ prometheus:
   server:
     image:
       repository: harbor-preprod.blackrock.com/library/external/gcr.io/gloo-mesh/prometheus
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
   configmapReload:
     prometheus:
       image:
         repository: harbor-preprod.blackrock.com/library/external/quay.io/prometheus-operator/prometheus-config-reloader
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
   resources:
     requests:
       cpu: 200m
-      memory: 512Mi
+      memory: 256Mi
     limits:
-      cpu: 1
-      memory: 1Gi
+      cpu: 300m
+      memory: 512Mi
 redis:
   deployment:
     enabled: true
@@ -122,7 +136,7 @@ telemetryCollector:
       cpu: 100m
       memory: 128Mi
     limits:
-      cpu: 500m
+      cpu: 200m
       memory: 256Mi
 telemetryGateway:
   enabled: true
