@@ -99,13 +99,13 @@ prometheus:
     prometheus:
       image:
         repository: harbor-preprod.blackrock.com/library/external/quay.io/prometheus-operator/prometheus-config-reloader
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 250m
-        memory: 256Mi
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 250m
+          memory: 256Mi
   resources:
     requests:
       cpu: 200m
